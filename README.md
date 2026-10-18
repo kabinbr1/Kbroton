@@ -1,4 +1,4 @@
-# Kbroton Game Launcher
+<h1><img src="assets/icons/kbroton-neon.png" alt="" width="48" align="center"> Kbroton Game Launcher</h1>
 
 A Qt 6 desktop launcher for adding and running Windows games and apps with GE-Proton/Wine/Proton on Linux.
 

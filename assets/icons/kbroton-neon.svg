@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#111a34"/>
+      <stop offset="1" stop-color="#080d1b"/>
+    </linearGradient>
+    <linearGradient id="pad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f6fbff"/>
+      <stop offset="1" stop-color="#c9d9ef"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <circle cx="256" cy="256" r="202" fill="none" stroke="#1c3150" stroke-width="2"/>
+  <path d="M154 175c-27 0-50 16-61 41L48 314c-13 31 0 67 31 80 30 13 65 1 82-26l34-54h122l34 54c17 27 52 39 82 26 31-13 44-49 31-80l-45-98c-11-25-34-41-61-41H154Z" fill="url(#pad)" stroke="#28d7e8" stroke-width="7" stroke-linejoin="round" filter="url(#glow)"/>
+  <rect x="184" y="205" width="144" height="93" rx="28" fill="#12213a" stroke="#6ceaf2" stroke-width="3"/>
+  <text x="256" y="271" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="53" font-weight="800" letter-spacing="1" fill="#f4fdff">KB</text>
+  <path d="M100 246h23v-23h23v23h23v23h-23v23h-23v-23h-23z" fill="#172840"/>
+  <circle cx="378" cy="246" r="13" fill="#ff5877"/>
+  <circle cx="408" cy="275" r="13" fill="#29d8e8"/>
+  <circle cx="348" cy="275" r="13" fill="#a280ff"/>
+  <circle cx="378" cy="304" r="13" fill="#f5c451"/>
+  <circle cx="217" cy="341" r="10" fill="#73869f"/>
+  <circle cx="295" cy="341" r="10" fill="#73869f"/>
+</svg>

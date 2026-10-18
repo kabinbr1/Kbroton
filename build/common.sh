@@ -23,6 +23,10 @@ prepare_tree() {
 
     mkdir -p "$app_dir"
     install -m 0644 "$ROOT_DIR/main.py" "$ROOT_DIR/localization.py" "$app_dir/"
+    install -Dm 0644 "$ROOT_DIR/assets/icons/kbroton-neon.png" \
+        "$app_dir/assets/icons/kbroton-neon.png"
+    install -Dm 0644 "$ROOT_DIR/assets/icons/kbroton-neon.png" \
+        "$destination/usr/share/icons/hicolor/512x512/apps/kbroton.png"
     cp -R "$ROOT_DIR/translations" "$app_dir/translations"
     install -Dm 0755 "$BUILD_DIR/kbroton" "$destination/usr/bin/kbroton"
     install -Dm 0644 "$BUILD_DIR/kbroton.desktop" \

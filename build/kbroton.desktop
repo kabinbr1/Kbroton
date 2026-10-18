@@ -3,6 +3,7 @@ Type=Application
 Name=Kbroton
 Comment=Launch Windows games and apps with Proton
 Exec=kbroton
+Icon=kbroton
 Terminal=false
 Categories=Game;Utility;
 StartupNotify=true

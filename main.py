@@ -17,7 +17,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from PySide6.QtCore import QProcess, QProcessEnvironment, QThread, QTimer, Qt, Signal
-from PySide6.QtGui import QAction, QActionGroup, QFont, QPixmap, QTextCursor
+from PySide6.QtGui import QAction, QActionGroup, QFont, QIcon, QPixmap, QTextCursor
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
@@ -52,6 +52,7 @@ DATA_DIR = DATA_HOME / APP_NAME
 LEGACY_DATA_DIR = DATA_HOME / "aster-launcher"
 CONFIG_FILE = DATA_DIR / "library.json"
 PROTON_GE_DIR = DATA_DIR / "proton-ge"
+APP_ICON_PATH = Path(__file__).resolve().parent / "assets/icons/kbroton-neon.png"
 STEAM_ROOTS = [
     Path.home() / ".steam/steam",
     Path.home() / ".local/share/Steam",
@@ -2999,6 +3000,7 @@ def main():
     arguments = parser.parse_args()
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
+    app.setWindowIcon(QIcon(str(APP_ICON_PATH)))
     app.setStyleSheet(ROUNDING_STYLESHEET)
     window = LauncherWindow()
     if arguments.launch_game:

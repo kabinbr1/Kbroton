@@ -41,6 +41,7 @@ tar -xzf %{SOURCE0} -C %{buildroot}
 /usr/bin/kbroton
 /usr/lib/kbroton
 /usr/share/applications/kbroton.desktop
+/usr/share/icons/hicolor/512x512/apps/kbroton.png
 /usr/share/doc/kbroton/README.md
 EOF
 
