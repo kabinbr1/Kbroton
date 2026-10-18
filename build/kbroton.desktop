@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Kbroton
+Comment=Launch Windows games and apps with Proton
+Exec=kbroton
+Terminal=false
+Categories=Game;Utility;
+StartupNotify=true

@@ -18,3 +18,19 @@ python3 -m venv .venv
 pip install -r requirements.txt
 python main.py
 ```
+
+## Build distribution packages
+
+Run the script on the corresponding distribution. Each script requires that
+distribution's package-building tools and writes the package to `dist/`.
+
+```sh
+./build/ubuntu.sh  # Ubuntu: creates a .deb (requires dpkg-deb)
+./build/fedora.sh  # Fedora: creates an .rpm (requires rpmbuild)
+./build/arch.sh    # Arch Linux: creates a .pkg.tar.zst (requires makepkg)
+```
+
+The packages install the application under `/usr/lib/kbroton`, add the
+`kbroton` command and a desktop launcher, and depend on the distribution's
+Python and PySide6 packages. Set `VERSION` to override the package version
+(default `0.1.0`) or `OUTPUT_DIR` to change the output directory.
