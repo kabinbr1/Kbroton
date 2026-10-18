@@ -143,10 +143,11 @@ def load_state():
             raise ValueError("The language setting is invalid.")
         automatic_proton_ge_updates = state.get("automatic_proton_ge_updates", False)
         proton_ge_prompt_dismissed = state.get("proton_ge_prompt_dismissed", False)
+        artwork_notice_dismissed = state.get("artwork_notice_dismissed", False)
         if not isinstance(automatic_proton_ge_updates, bool) or not isinstance(
             proton_ge_prompt_dismissed, bool
-        ):
-            raise ValueError("The GE-Proton settings are invalid.")
+        ) or not isinstance(artwork_notice_dismissed, bool):
+            raise ValueError("The application settings are invalid.")
         try:
             set_language(language)
         except ValueError as error:
@@ -201,6 +202,7 @@ def load_state():
             "language": language,
             "automatic_proton_ge_updates": automatic_proton_ge_updates,
             "proton_ge_prompt_dismissed": proton_ge_prompt_dismissed,
+            "artwork_notice_dismissed": artwork_notice_dismissed,
             "games": games,
         }
     except (OSError, json.JSONDecodeError, ValueError, TypeError) as error:
@@ -218,6 +220,7 @@ def load_state():
             "language": "system",
             "automatic_proton_ge_updates": False,
             "proton_ge_prompt_dismissed": False,
+            "artwork_notice_dismissed": False,
             "games": [],
         }
 
@@ -710,8 +713,13 @@ class LauncherWindow(QMainWindow):
         close_notice.setToolTip(tr("Dismiss"))
         close_notice.clicked.connect(self.artwork_key_notice.hide)
         notice_layout.addWidget(close_notice)
+        never_ask_notice = QPushButton(tr("Never ask again"))
+        never_ask_notice.setObjectName("textButton")
+        never_ask_notice.clicked.connect(self.dismiss_artwork_notice_permanently)
+        notice_layout.addWidget(never_ask_notice)
         self.artwork_key_notice.setVisible(
             not bool(self.state.get("steamgriddb_api_key", "").strip())
+            and not self.state.get("artwork_notice_dismissed", False)
         )
         layout.addWidget(self.artwork_key_notice)
 
@@ -1464,6 +1472,14 @@ class LauncherWindow(QMainWindow):
             self.automatic_proton_ge_updates.setChecked(previous_value)
             self.automatic_proton_ge_updates.blockSignals(False)
 
+    def dismiss_artwork_notice_permanently(self):
+        previous_value = self.state.get("artwork_notice_dismissed", False)
+        self.state["artwork_notice_dismissed"] = True
+        if self.persist_state():
+            self.artwork_key_notice.hide()
+        else:
+            self.state["artwork_notice_dismissed"] = previous_value
+
     def save_artwork_settings(self):
         previous_key = self.state.get("steamgriddb_api_key", "")
         self.state["steamgriddb_api_key"] = self.steamgriddb_api_key.text().strip()
@@ -1487,7 +1503,7 @@ class LauncherWindow(QMainWindow):
             self.request_game_icon(game)
         if self.state["steamgriddb_api_key"]:
             self.artwork_key_notice.hide()
-        else:
+        elif not self.state.get("artwork_notice_dismissed", False):
             self.artwork_key_notice.show()
 
     def add_game(self):

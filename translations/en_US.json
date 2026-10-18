@@ -111,6 +111,7 @@
   "New game or app installations will now use {version}.": "New game or app installations will now use {version}.",
   "No Proton found — configure it in Settings": "No Proton found — configure it in Settings",
   "No Proton version was found. Choose or install a Proton version in Settings before adding a game.": "No Proton version was found. Choose or install a Proton version in Settings before adding a game.",
+  "Never ask again": "Never ask again",
   "GE-Proton is a compatibility layer that enables Windows games and applications to run on Linux. No Proton version was detected, so we recommend installing GE-Proton. Would you like to install it now?": "GE-Proton is a compatibility layer that enables Windows games and applications to run on Linux. No Proton version was detected, so we recommend installing GE-Proton. Would you like to install it now?",
   "Not now": "Not now",
   "GE-Proton is a compatibility layer that enables Windows games and applications to run on Linux. We detected an existing Proton version on your system, so installing GE-Proton is not necessary. Would you like to install it anyway?": "GE-Proton is a compatibility layer that enables Windows games and applications to run on Linux. We detected an existing Proton version on your system, so installing GE-Proton is not necessary. Would you like to install it anyway?",
