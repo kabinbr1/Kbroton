@@ -33,4 +33,4 @@ distribution's package-building tools and writes the package to `dist/`.
 The packages install the application under `/usr/lib/kbroton`, add the
 `kbroton` command and a desktop launcher, and depend on the distribution's
 Python and PySide6 packages. Set `VERSION` to override the package version
-(default `0.1.0`) or `OUTPUT_DIR` to change the output directory.
+(default `1.0.0`) or `OUTPUT_DIR` to change the output directory.

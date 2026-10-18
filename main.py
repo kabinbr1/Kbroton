@@ -44,6 +44,7 @@ from PySide6.QtWidgets import (
 from localization import LANGUAGE_OPTIONS, resolve_language, set_language, tr
 
 APP_NAME = "Kbroton"
+APP_VERSION = "1.0.0"
 PROTON_GE_RELEASES_API = (
     "https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases/latest"
 )
@@ -1089,12 +1090,18 @@ class LauncherWindow(QMainWindow):
         heading_font.setPointSize(heading_font.pointSize() + 4)
         heading_font.setWeight(QFont.Weight.DemiBold)
         heading.setFont(heading_font)
+        title_row = QHBoxLayout()
+        title_row.addWidget(heading)
+        title_row.addStretch()
+        version_badge = QLabel(f"v{APP_VERSION}")
+        version_badge.setObjectName("appVersionBadge")
+        title_row.addWidget(version_badge)
         intro = QLabel(
             tr("Choose the default compatibility tool for newly added apps and games.")
         )
         intro.setObjectName("muted")
         intro.setWordWrap(True)
-        header_layout.addWidget(heading)
+        header_layout.addLayout(title_row)
         header_layout.addWidget(intro)
         layout.addWidget(header)
 
@@ -2861,6 +2868,12 @@ QFrame#artworkKeyNotice {
 QFrame#settingsHeaderPanel {
     background-color: palette(alternate-base);
 }
+QLabel#appVersionBadge {
+    border: 1px solid palette(mid);
+    border-radius: 8px;
+    padding: 3px 8px;
+    font-weight: 600;
+}
 QFrame#libraryHeaderPanel {
     background-color: palette(alternate-base);
 }
@@ -3000,6 +3013,7 @@ def main():
     arguments = parser.parse_args()
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
+    app.setApplicationVersion(APP_VERSION)
     app.setWindowIcon(QIcon(str(APP_ICON_PATH)))
     app.setStyleSheet(ROUNDING_STYLESHEET)
     window = LauncherWindow()
