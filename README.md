@@ -8,7 +8,13 @@ A Qt 6 desktop launcher for adding and running Windows games and apps with GE-Pr
 
 - Python 3.10+
 - PySide6
-- Internet access on startup to check and download the latest GE-Proton release
+- Internet access only when downloading/updating GE-Proton or looking up online artwork
+
+Kbroton detects Proton installations from Steam and lets you select one in
+Settings. GE-Proton is not downloaded automatically unless automatic updates
+are enabled in Settings; you can also download or update it there at any time.
+On first launch, Kbroton asks whether you want to install GE-Proton and
+recommends it when no other Proton version is detected.
 
 ## Run
 

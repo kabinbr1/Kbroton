@@ -39,6 +39,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
     QComboBox,
+    QCheckBox,
 )
 
 from localization import LANGUAGE_OPTIONS, resolve_language, set_language, tr
@@ -140,6 +141,12 @@ def load_state():
         language = state.get("language", "system")
         if not isinstance(language, str):
             raise ValueError("The language setting is invalid.")
+        automatic_proton_ge_updates = state.get("automatic_proton_ge_updates", False)
+        proton_ge_prompt_dismissed = state.get("proton_ge_prompt_dismissed", False)
+        if not isinstance(automatic_proton_ge_updates, bool) or not isinstance(
+            proton_ge_prompt_dismissed, bool
+        ):
+            raise ValueError("The GE-Proton settings are invalid.")
         try:
             set_language(language)
         except ValueError as error:
@@ -192,6 +199,8 @@ def load_state():
             "proton_ge_path": proton_ge_path,
             "steamgriddb_api_key": steamgriddb_api_key,
             "language": language,
+            "automatic_proton_ge_updates": automatic_proton_ge_updates,
+            "proton_ge_prompt_dismissed": proton_ge_prompt_dismissed,
             "games": games,
         }
     except (OSError, json.JSONDecodeError, ValueError, TypeError) as error:
@@ -203,7 +212,14 @@ def load_state():
                 error=error,
             ),
         )
-        return {"proton_path": "", "proton_ge_path": "", "language": "system", "games": []}
+        return {
+            "proton_path": "",
+            "proton_ge_path": "",
+            "language": "system",
+            "automatic_proton_ge_updates": False,
+            "proton_ge_prompt_dismissed": False,
+            "games": [],
+        }
 
 
 def save_state(state):
@@ -610,7 +626,14 @@ class LauncherWindow(QMainWindow):
                     directory=DATA_DIR,
                 ),
             )
-        self.proton_setup_pending = not self.has_installed_proton_ge()
+        detected_proton = self.available_proton_tools()
+        if not self.state.get("proton_path") and detected_proton:
+            self.state["proton_path"] = str(detected_proton[0])
+        self.first_run_proton_prompt = (
+            not self.has_installed_proton_ge()
+            and not self.state.get("proton_ge_prompt_dismissed", False)
+            and not self.state.get("automatic_proton_ge_updates", False)
+        )
         self.game_processes = {}
         self.game_sessions = {}
         self.game_status_labels = {}
@@ -696,23 +719,28 @@ class LauncherWindow(QMainWindow):
         self.proton_update_panel.setObjectName("protonUpdatePanel")
         self.proton_update_panel.setFrameShape(QFrame.Shape.Panel)
         self.proton_update_panel.setFrameShadow(QFrame.Shadow.Raised)
+        self.proton_notice_timer = QTimer(self)
+        self.proton_notice_timer.setSingleShot(True)
+        self.proton_notice_timer.setInterval(6000)
+        self.proton_notice_timer.timeout.connect(self.proton_update_panel.hide)
         update_layout = QVBoxLayout(self.proton_update_panel)
         update_layout.setContentsMargins(14, 9, 14, 9)
         update_layout.setSpacing(5)
         update_title = QLabel(tr("Compatibility tools"))
         update_title.setObjectName("gameTitle")
         update_layout.addWidget(update_title)
-        self.proton_first_run_notice = QLabel(
-            tr("The app will be unlocked after proton-ge is downloaded and extracted.")
-        )
-        self.proton_first_run_notice.setObjectName("smallMuted")
-        self.proton_first_run_notice.setWordWrap(True)
-        self.proton_first_run_notice.setVisible(self.proton_setup_pending)
-        update_layout.addWidget(self.proton_first_run_notice)
         update_row = QHBoxLayout()
         self.proton_update_status = QLabel()
         self.proton_update_status.setObjectName("smallMuted")
         update_row.addWidget(self.proton_update_status, 1)
+        self.proton_update_dismiss = QPushButton("×")
+        self.proton_update_dismiss.setObjectName("protonUpdateDismiss")
+        self.proton_update_dismiss.setProperty("noticeClose", True)
+        self.proton_update_dismiss.setFixedSize(30, 30)
+        self.proton_update_dismiss.setAccessibleName(tr("Dismiss"))
+        self.proton_update_dismiss.setToolTip(tr("Dismiss"))
+        self.proton_update_dismiss.clicked.connect(self.dismiss_proton_update_notice)
+        update_row.addWidget(self.proton_update_dismiss)
         self.proton_progress = QProgressBar()
         self.proton_progress.setObjectName("protonProgress")
         self.proton_progress.setTextVisible(False)
@@ -750,7 +778,10 @@ class LauncherWindow(QMainWindow):
             self.request_game_icon(game)
         self.refresh_proton_options()
         self.update_install_access()
-        self.start_proton_update()
+        if self.state.get("automatic_proton_ge_updates", False):
+            self.start_proton_update()
+        if self.first_run_proton_prompt:
+            QTimer.singleShot(0, self.prompt_for_proton)
         self.process_monitor = QTimer(self)
         self.process_monitor.timeout.connect(self.update_game_process_status)
         self.process_monitor.start(1500)
@@ -767,15 +798,73 @@ class LauncherWindow(QMainWindow):
         return scroll
 
     def start_proton_update(self):
+        if hasattr(self, "proton_updater") and self.proton_updater.isRunning():
+            return
         self.proton_updater = ProtonGeUpdater(self)
         self.proton_updater.status_changed.connect(self.set_proton_update_status)
         self.proton_updater.download_progress.connect(self.update_download_progress)
         self.proton_updater.installed.connect(self.on_proton_installed)
         self.proton_updater.failed.connect(self.on_proton_update_failed)
+        self.proton_updater.finished.connect(self.on_proton_update_finished)
+        if hasattr(self, "proton_update_button"):
+            self.proton_update_button.setEnabled(False)
         self.proton_updater.start()
 
+    def prompt_for_proton(self):
+        dialog = QMessageBox(self)
+        dialog.setWindowTitle(tr("Set up Proton"))
+        dialog.setText(
+            tr(
+                "GE-Proton is a compatibility layer that enables Windows games and "
+                "applications to run on Linux. No Proton version was detected, so we "
+                "recommend installing GE-Proton. Would you like to install it now?"
+                if not self.available_proton_tools()
+                else "GE-Proton is a compatibility layer that enables Windows games "
+                "and applications to run on Linux. We detected an existing Proton "
+                "version on your system, so installing GE-Proton is not necessary. "
+                "Would you like to install it anyway?"
+            )
+        )
+        download_button = dialog.addButton(
+            tr("Download GE-Proton"), QMessageBox.ButtonRole.AcceptRole
+        )
+        settings_button = dialog.addButton(
+            tr("Choose an existing Proton"), QMessageBox.ButtonRole.ActionRole
+        )
+        not_now_button = dialog.addButton(
+            tr("Not now"), QMessageBox.ButtonRole.RejectRole
+        )
+        dialog.exec()
+        if dialog.clickedButton() == download_button:
+            self.state["proton_ge_prompt_dismissed"] = True
+            self.persist_state()
+            self.start_proton_update()
+        elif dialog.clickedButton() in (settings_button, not_now_button):
+            self.state["proton_ge_prompt_dismissed"] = True
+            self.persist_state()
+            if dialog.clickedButton() == settings_button:
+                self.show_page("settings")
+
+    def has_installed_proton_ge(self):
+        saved_path = self.state.get("proton_ge_path", "")
+        candidates = [Path(saved_path)] if saved_path else []
+        if PROTON_GE_DIR.is_dir():
+            candidates.extend(PROTON_GE_DIR.glob("*/proton"))
+        return any(
+            path.is_file() and os.access(path, os.X_OK)
+            for path in candidates
+        )
+
+    def on_proton_update_finished(self):
+        if hasattr(self, "proton_update_button"):
+            self.proton_update_button.setEnabled(True)
+
+    def dismiss_proton_update_notice(self):
+        self.proton_notice_timer.stop()
+        self.proton_update_panel.hide()
+
     def closeEvent(self, event):
-        if self.proton_updater.isRunning():
+        if hasattr(self, "proton_updater") and self.proton_updater.isRunning():
             self.proton_updater.requestInterruption()
             if not self.proton_updater.wait(1000):
                 self.proton_update_status.setText(
@@ -793,7 +882,10 @@ class LauncherWindow(QMainWindow):
     def set_proton_update_status(self, message):
         is_downloading = message.startswith("Downloading ")
         is_unpacking = message.startswith("Verifying ")
-        if message == "Checking for the latest GE-Proton release…":
+        is_checking = message == "Checking for the latest GE-Proton release…"
+        is_up_to_date = message.endswith(" is already installed; it is up to date.")
+        is_ready = message.endswith(" is ready.")
+        if is_checking:
             message = tr("Checking for the latest GE-Proton release…")
         elif message.startswith("Downloading "):
             tag = message[len("Downloading "):-len(" from GitHub…")]
@@ -801,14 +893,20 @@ class LauncherWindow(QMainWindow):
         elif message.startswith("Verifying and unpacking "):
             tag = message[len("Verifying and unpacking "):-1]
             message = tr("Verifying and unpacking {tag}…", tag=tag)
-        elif message.endswith(" is already installed; it is up to date."):
+        elif is_up_to_date:
             tag = message.removesuffix(" is already installed; it is up to date.")
             message = tr("{tag} is already installed; it is up to date.", tag=tag)
-        elif message.endswith(" is ready."):
+        elif is_ready:
             tag = message.removesuffix(" is ready.")
             message = tr("{tag} is ready.", tag=tag)
         self.proton_update_status.setText(message)
-        self.proton_update_panel.setVisible(is_downloading or is_unpacking)
+        if is_ready or is_up_to_date:
+            self.proton_notice_timer.start()
+        elif is_downloading or is_unpacking or is_checking:
+            self.proton_notice_timer.stop()
+        self.proton_update_panel.setVisible(
+            is_checking or is_downloading or is_unpacking or is_up_to_date or is_ready
+        )
         self.proton_progress.setVisible(is_downloading or is_unpacking)
         if is_downloading:
             self.proton_progress.setRange(0, 0)
@@ -820,8 +918,6 @@ class LauncherWindow(QMainWindow):
         self.proton_progress.setValue(downloaded)
 
     def on_proton_installed(self, proton_path, tag):
-        self.proton_setup_pending = False
-        self.proton_first_run_notice.hide()
         previous_ge_path = self.state.get("proton_ge_path", "")
         current_default = self.state.get("proton_path", "")
         previous_default = current_default
@@ -847,8 +943,6 @@ class LauncherWindow(QMainWindow):
         self.proton_progress.hide()
 
     def on_proton_update_failed(self, message):
-        self.proton_setup_pending = False
-        self.proton_first_run_notice.hide()
         self.proton_progress.hide()
         self.proton_update_status.setText(tr("GE-Proton update failed: {message}", message=message))
         self.proton_update_status.setToolTip(message)
@@ -861,11 +955,8 @@ class LauncherWindow(QMainWindow):
         )
 
     def show_page(self, name):
-        if name == "settings" and self.proton_setup_pending:
-            return
         if name == "install" and (
-            self.proton_setup_pending
-            or not self.state.get("proton_path")
+            not self.state.get("proton_path")
             or not Path(self.state["proton_path"]).is_file()
         ):
             return
@@ -967,43 +1058,19 @@ class LauncherWindow(QMainWindow):
 
     def update_install_access(self):
         proton_path = self.state.get("proton_path", "")
-        ready = bool(
-            not self.proton_setup_pending
-            and proton_path
-            and Path(proton_path).is_file()
-        )
+        ready = bool(proton_path and Path(proton_path).is_file())
         install_action = self.nav_actions.get("install")
         if install_action:
             install_action.setEnabled(ready)
             install_action.setToolTip(
-                tr("Wait for the first GE-Proton download and extraction to finish.")
-                if self.proton_setup_pending
-                else tr(
-                    "Choose a Proton version in Settings or wait for GE-Proton to finish downloading."
+                tr(
+                    "No Proton version was found. Choose or install a Proton version "
+                    "in Settings before adding a game."
                 )
                 if not ready else ""
             )
-        settings_action = self.nav_actions.get("settings")
-        if settings_action:
-            settings_action.setEnabled(not self.proton_setup_pending)
-            settings_action.setToolTip(
-                "Settings will be available after the first GE-Proton download and extraction."
-                if self.proton_setup_pending else ""
-            )
         if hasattr(self, "install_page"):
             self.install_page.setEnabled(ready)
-        if hasattr(self, "settings_page"):
-            self.settings_page.setEnabled(not self.proton_setup_pending)
-
-    def has_installed_proton_ge(self):
-        saved_path = self.state.get("proton_ge_path", "")
-        candidates = [Path(saved_path)] if saved_path else []
-        if PROTON_GE_DIR.is_dir():
-            candidates.extend(PROTON_GE_DIR.glob("*/proton"))
-        return any(
-            path.is_file() and os.access(path, os.X_OK)
-            for path in candidates
-        )
 
     def build_installed_page(self):
         page = QWidget()
@@ -1168,6 +1235,40 @@ class LauncherWindow(QMainWindow):
         self.save_settings_button.clicked.connect(self.save_proton_setting)
         form.addWidget(self.save_settings_button)
         layout.addWidget(panel)
+
+        ge_panel = QFrame()
+        ge_panel.setObjectName("settingsFormPanel")
+        ge_panel.setFrameShape(QFrame.Shape.StyledPanel)
+        ge_layout = QVBoxLayout(ge_panel)
+        ge_layout.setContentsMargins(24, 18, 24, 20)
+        ge_layout.setSpacing(10)
+        ge_heading = QLabel(tr("GE-Proton updates"))
+        ge_heading.setObjectName("gameTitle")
+        ge_layout.addWidget(ge_heading)
+        self.automatic_proton_ge_updates = QCheckBox(
+            tr("Automatically check for GE-Proton updates on startup")
+        )
+        self.automatic_proton_ge_updates.setChecked(
+            self.state.get("automatic_proton_ge_updates", False)
+        )
+        self.automatic_proton_ge_updates.toggled.connect(
+            self.save_proton_ge_update_preference
+        )
+        ge_layout.addWidget(self.automatic_proton_ge_updates)
+        ge_note = QLabel(
+            tr(
+                "Automatically check for updates and download the latest GE-Proton "
+                "release on startup. This is optional and off by default."
+            )
+        )
+        ge_note.setObjectName("smallMuted")
+        ge_note.setWordWrap(True)
+        ge_layout.addWidget(ge_note)
+        self.proton_update_button = QPushButton(tr("Download / update GE-Proton"))
+        self.proton_update_button.setObjectName("secondaryButton")
+        self.proton_update_button.clicked.connect(self.start_proton_update)
+        ge_layout.addWidget(self.proton_update_button)
+        layout.addWidget(ge_panel)
 
         artwork_panel = QFrame()
         artwork_panel.setObjectName("settingsFormPanel")
@@ -1353,6 +1454,15 @@ class LauncherWindow(QMainWindow):
             tr("Settings saved"),
             tr("New game or app installations will now use {version}.", version=proton_label(path)),
         )
+
+    def save_proton_ge_update_preference(self, enabled):
+        previous_value = self.state.get("automatic_proton_ge_updates", False)
+        self.state["automatic_proton_ge_updates"] = enabled
+        if not self.persist_state():
+            self.state["automatic_proton_ge_updates"] = previous_value
+            self.automatic_proton_ge_updates.blockSignals(True)
+            self.automatic_proton_ge_updates.setChecked(previous_value)
+            self.automatic_proton_ge_updates.blockSignals(False)
 
     def save_artwork_settings(self):
         previous_key = self.state.get("steamgriddb_api_key", "")
@@ -2914,6 +3024,24 @@ QFrame#gameIconFrame {
     border: 1px solid palette(mid);
     border-radius: 10px;
     background-color: palette(window);
+}
+QFrame#protonUpdatePanel {
+    border-color: #0d47a1;
+    background-color: #1565c0;
+}
+QFrame#protonUpdatePanel QLabel {
+    color: white;
+}
+QProgressBar#protonProgress {
+    border: 0;
+    background-color: #0d47a1;
+}
+QProgressBar#protonProgress::chunk {
+    background-color: #64b5f6;
+}
+QPushButton#protonUpdateDismiss {
+    font-size: 20px;
+    padding: 0;
 }
 QFrame#gameIconFrame {
     background-color: palette(base);
