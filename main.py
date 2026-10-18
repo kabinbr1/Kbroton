@@ -156,6 +156,19 @@ def load_state():
             ):
                 raise ValueError("A game entry in the launcher library is invalid.")
             uuid.UUID(game["id"])
+            if "custom_icon" in game and not isinstance(game["custom_icon"], bool):
+                raise ValueError("A game entry has an invalid custom-icon setting.")
+            custom_icon_revision = game.get("custom_icon_revision")
+            if custom_icon_revision is not None:
+                try:
+                    valid_icon_revision = (
+                        isinstance(custom_icon_revision, str)
+                        and uuid.UUID(hex=custom_icon_revision).hex == custom_icon_revision
+                    )
+                except ValueError:
+                    valid_icon_revision = False
+                if not valid_icon_revision:
+                    raise ValueError("A game entry has an invalid custom-icon revision.")
             compat_data_path = game.get("compat_data_path")
             if compat_data_path is not None and (
                 not isinstance(compat_data_path, str)
@@ -1578,7 +1591,9 @@ class LauncherWindow(QMainWindow):
 
     def game_icon_path(self, game):
         icon_id = uuid.UUID(game["id"]).hex
-        return DATA_DIR / "icons" / f"{icon_id}.png"
+        revision = game.get("custom_icon_revision")
+        filename = f"{icon_id}-{revision}.png" if revision else f"{icon_id}.png"
+        return DATA_DIR / "icons" / filename
 
     def desktop_entry_path(self, game):
         game_id = uuid.UUID(game["id"]).hex
@@ -1684,6 +1699,19 @@ class LauncherWindow(QMainWindow):
         if pixmap.isNull():
             label.setToolTip(tr("Could not read cached app icon: {path}", path=icon_path))
             return
+        self.display_game_icon(game, label, pixmap)
+        label.setToolTip(
+            tr("Custom app icon.")
+            if game.get("custom_icon")
+            else tr("App icon from SteamGridDB.")
+        )
+
+    @staticmethod
+    def display_game_icon(game, label, pixmap):
+        if pixmap.isNull():
+            label.setPixmap(QPixmap())
+            label.setText(game.get("name", "?")[:1].upper())
+            return
         label.setText("")
         label.setPixmap(
             pixmap.scaled(
@@ -1693,7 +1721,6 @@ class LauncherWindow(QMainWindow):
                 Qt.TransformationMode.SmoothTransformation,
             )
         )
-        label.setToolTip(tr("App icon from SteamGridDB."))
 
     def has_cached_game_icon(self, game):
         icon_path = self.game_icon_path(game)
@@ -1701,7 +1728,11 @@ class LauncherWindow(QMainWindow):
 
     def request_game_icon(self, game):
         game_id = game["id"]
-        if self.has_cached_game_icon(game) or game_id in self.icon_lookup_workers:
+        if (
+            game.get("custom_icon")
+            or self.has_cached_game_icon(game)
+            or game_id in self.icon_lookup_workers
+        ):
             return
         api_key = self.state.get("steamgriddb_api_key", "").strip()
         if not api_key:
@@ -1731,6 +1762,8 @@ class LauncherWindow(QMainWindow):
             None,
         )
         if game is None:
+            return
+        if game.get("custom_icon"):
             return
         pixmap = QPixmap()
         if not pixmap.loadFromData(image_data):
@@ -1845,6 +1878,69 @@ class LauncherWindow(QMainWindow):
         )
         layout.addWidget(proton)
 
+        icon_label = QLabel(tr("Current icon"))
+        layout.addWidget(icon_label)
+        icon_preview = QLabel(game.get("name", "?")[:1].upper())
+        icon_preview.setObjectName("gameIcon")
+        icon_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        icon_preview.setFixedSize(88, 88)
+        current_icon = QPixmap(str(self.game_icon_path(game)))
+        if not self.has_cached_game_icon(game):
+            current_icon = QPixmap()
+        self.display_game_icon(game, icon_preview, current_icon)
+        layout.addWidget(icon_preview, 0, Qt.AlignmentFlag.AlignHCenter)
+
+        icon_actions = QHBoxLayout()
+        choose_icon = QPushButton(tr("Select custom icon"))
+        choose_icon.setObjectName("secondaryButton")
+        save_icon = QPushButton(tr("Save icon"))
+        save_icon.setObjectName("secondaryButton")
+        save_icon.setEnabled(False)
+        selected_icon_path = [""]
+
+        def select_custom_icon():
+            icon_directory = self.game_icon_path(game).parent
+            try:
+                icon_directory.mkdir(parents=True, exist_ok=True)
+                if icon_directory.is_symlink():
+                    raise OSError(f"Refusing to open a symlink: {icon_directory}")
+            except OSError as error:
+                QMessageBox.warning(
+                    dialog,
+                    tr("Could not open icon folder"),
+                    str(error),
+                )
+                return
+            selected_path, _ = QFileDialog.getOpenFileName(
+                dialog,
+                tr("Choose an image for the app icon"),
+                str(icon_directory),
+                tr("Image files (*.png *.jpg *.jpeg *.bmp *.gif *.webp *.ico *.svg);;All files (*)"),
+            )
+            if not selected_path:
+                return
+            selected_pixmap = QPixmap(selected_path)
+            if selected_pixmap.isNull():
+                QMessageBox.warning(
+                    dialog,
+                    tr("Invalid app icon"),
+                    tr("Select a readable image file."),
+                )
+                return
+            selected_icon_path[0] = selected_path
+            self.display_game_icon(game, icon_preview, selected_pixmap)
+            save_icon.setEnabled(True)
+
+        choose_icon.clicked.connect(select_custom_icon)
+        save_icon.clicked.connect(
+            lambda: self.save_custom_game_icon(
+                dialog, game, selected_icon_path[0]
+            )
+        )
+        icon_actions.addWidget(choose_icon)
+        icon_actions.addWidget(save_icon)
+        layout.addLayout(icon_actions)
+
         change_executable = QPushButton(tr("Change game executable"))
         change_executable.setObjectName("secondaryButton")
         change_executable.clicked.connect(
@@ -1877,6 +1973,94 @@ class LauncherWindow(QMainWindow):
         remove.clicked.connect(lambda: self.remove_game_from_settings(dialog, game))
         layout.addWidget(remove)
         dialog.exec()
+
+    def save_custom_game_icon(self, dialog, game, selected_icon_path):
+        if not selected_icon_path:
+            return
+        pixmap = QPixmap(selected_icon_path)
+        if pixmap.isNull():
+            QMessageBox.warning(
+                dialog,
+                tr("Invalid app icon"),
+                tr("Select a readable image file."),
+            )
+            return
+
+        previous_custom_icon = game.get("custom_icon")
+        previous_icon_revision = game.get("custom_icon_revision")
+        game["custom_icon"] = True
+        game["custom_icon_revision"] = uuid.uuid4().hex
+        icon_path = self.game_icon_path(game)
+        temporary_path = None
+        icon_installed = False
+        try:
+            icon_path.parent.mkdir(parents=True, exist_ok=True)
+            if icon_path.parent.is_symlink() or icon_path.is_symlink():
+                raise OSError(f"Refusing to write through a symlink: {icon_path}")
+            with tempfile.NamedTemporaryFile(
+                mode="wb",
+                dir=icon_path.parent,
+                prefix=".kbroton-icon-",
+                suffix=".png.tmp",
+                delete=False,
+            ) as temporary_file:
+                temporary_path = Path(temporary_file.name)
+            if not pixmap.save(str(temporary_path), "PNG"):
+                raise OSError(tr("Qt could not encode the selected app icon as PNG."))
+            temporary_path.replace(icon_path)
+            temporary_path = None
+            icon_installed = True
+            if not self.persist_state():
+                self.restore_custom_icon(game, previous_custom_icon, previous_icon_revision)
+                icon_path.unlink(missing_ok=True)
+                return
+        except OSError as error:
+            self.restore_custom_icon(game, previous_custom_icon, previous_icon_revision)
+            if icon_installed:
+                icon_path.unlink(missing_ok=True)
+            QMessageBox.critical(
+                dialog,
+                tr("Could not save app icon"),
+                str(error),
+            )
+            return
+        finally:
+            if temporary_path is not None:
+                try:
+                    temporary_path.unlink(missing_ok=True)
+                except OSError as error:
+                    QMessageBox.warning(
+                        dialog,
+                        tr("Could not save app icon"),
+                        str(error),
+                    )
+
+        try:
+            self.write_game_desktop_entry(game)
+        except OSError as error:
+            QMessageBox.warning(
+                dialog,
+                tr("Could not create app menu entry"),
+                tr(
+                    "App icon saved, but the desktop launcher could not be updated: {error}",
+                    error=error,
+                ),
+            )
+        label = self.game_icon_labels.get(game["id"])
+        if label:
+            self.load_game_icon(game, label)
+        dialog.accept()
+
+    @staticmethod
+    def restore_custom_icon(game, previous_custom_icon, previous_icon_revision):
+        if previous_custom_icon is None:
+            game.pop("custom_icon", None)
+        else:
+            game["custom_icon"] = previous_custom_icon
+        if previous_icon_revision is None:
+            game.pop("custom_icon_revision", None)
+        else:
+            game["custom_icon_revision"] = previous_icon_revision
 
     def game_compat_data_path(self, game):
         prefix_id = uuid.UUID(game["id"]).hex[:16]
