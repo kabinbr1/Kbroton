@@ -3,7 +3,7 @@
 BUILD_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd -- "$BUILD_DIR/.." && pwd)"
 OUTPUT_DIR="${OUTPUT_DIR:-$ROOT_DIR/dist}"
-VERSION="${VERSION:-1.0.1}"
+VERSION="${VERSION:-1.1.0}"
 
 if [[ ! "$VERSION" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
     printf 'VERSION must contain only numbers separated by dots: %s\n' "$VERSION" >&2
