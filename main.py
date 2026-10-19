@@ -46,6 +46,20 @@ from localization import LANGUAGE_OPTIONS, resolve_language, set_language, tr
 
 APP_NAME = "Kbroton"
 APP_VERSION = "1.0.1"
+APP_CATEGORIES = (
+    ("Game", "Game"),
+    ("AudioVideo", "Audio/Video"),
+    ("Development", "Development"),
+    ("Education", "Education"),
+    ("Graphics", "Graphics"),
+    ("Network", "Network"),
+    ("Office", "Office"),
+    ("Science", "Science"),
+    ("Settings", "Settings"),
+    ("System", "System"),
+    ("Utility", "Utility"),
+)
+APP_CATEGORY_IDS = {category for category, _ in APP_CATEGORIES}
 PROTON_GE_RELEASES_API = (
     "https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases/latest"
 )
@@ -141,6 +155,8 @@ def load_state():
         language = state.get("language", "system")
         if not isinstance(language, str):
             raise ValueError("The language setting is invalid.")
+        if language == "en_GB":
+            language = "en_US"
         automatic_proton_ge_updates = state.get("automatic_proton_ge_updates", False)
         proton_ge_prompt_dismissed = state.get("proton_ge_prompt_dismissed", False)
         artwork_notice_dismissed = state.get("artwork_notice_dismissed", False)
@@ -168,6 +184,9 @@ def load_state():
             uuid.UUID(game["id"])
             if "custom_icon" in game and not isinstance(game["custom_icon"], bool):
                 raise ValueError("A game entry has an invalid custom-icon setting.")
+            category = game.setdefault("category", "Game")
+            if not isinstance(category, str) or category not in APP_CATEGORY_IDS:
+                raise ValueError("A game entry has an invalid application category.")
             custom_icon_revision = game.get("custom_icon_revision")
             if custom_icon_revision is not None:
                 try:
@@ -492,13 +511,7 @@ class SteamGridDBIconLookup(QThread):
             ).get("data", [])
             if self.isInterruptionRequested():
                 return
-            icon_url = next(
-                (
-                    item.get("url") for item in icons
-                    if isinstance(item, dict) and isinstance(item.get("url"), str)
-                ),
-                None,
-            )
+            icon_url = self.highest_resolution_icon_url(icons)
             if not icon_url:
                 self.icon_not_found.emit(self.game_id)
                 return
@@ -536,6 +549,34 @@ class SteamGridDBIconLookup(QThread):
             self.icon_found.emit(self.game_id, image_data)
         except (HTTPError, URLError, OSError, ValueError, KeyError, TypeError) as error:
             self.failed.emit(self.game_id, str(error))
+
+    @staticmethod
+    def highest_resolution_icon_url(icons):
+        fallback_url = None
+        best_url = None
+        best_dimensions = (0, 0)
+        for item in icons:
+            if not isinstance(item, dict) or not isinstance(item.get("url"), str):
+                continue
+            url = item["url"]
+            if fallback_url is None:
+                fallback_url = url
+            width = item.get("width")
+            height = item.get("height")
+            if (
+                isinstance(width, bool)
+                or not isinstance(width, int)
+                or isinstance(height, bool)
+                or not isinstance(height, int)
+                or width <= 0
+                or height <= 0
+            ):
+                continue
+            dimensions = (width * height, min(width, height))
+            if dimensions > best_dimensions:
+                best_url = url
+                best_dimensions = dimensions
+        return best_url or fallback_url
 
     def get_json(self, url):
         request = Request(
@@ -650,7 +691,7 @@ class LauncherWindow(QMainWindow):
         self.icon_lookup_workers = {}
         self.log_buffers = {}
         self.selected_log_game = None
-        self.setWindowTitle(tr("{app} — Game Launcher", app=APP_NAME))
+        self.setWindowTitle("kbroton")
         self.resize(1040, 720)
         self.setMinimumSize(760, 560)
 
@@ -1019,7 +1060,7 @@ class LauncherWindow(QMainWindow):
         form_layout.addWidget(self.field_label(tr("WINDOWS EXECUTABLE")))
         file_row = QHBoxLayout()
         self.exe_path = QLineEdit()
-        self.exe_path.setPlaceholderText(tr("Choose the game's .exe file"))
+        self.exe_path.setPlaceholderText(tr("Choose the game's or app's .exe file"))
         self.exe_path.textChanged.connect(self.update_name_from_path)
         browse_exe = QPushButton(tr("Browse"))
         browse_exe.setObjectName("secondaryButton")
@@ -1027,6 +1068,12 @@ class LauncherWindow(QMainWindow):
         file_row.addWidget(self.exe_path, 1)
         file_row.addWidget(browse_exe)
         form_layout.addLayout(file_row)
+        form_layout.addWidget(self.field_label(tr("APP CATEGORY")))
+        self.app_category = QComboBox()
+        self.app_category.setMinimumHeight(44)
+        for category, label in APP_CATEGORIES:
+            self.app_category.addItem(tr(label), category)
+        form_layout.addWidget(self.app_category)
         form_layout.addWidget(self.field_label(tr("PROTON VERSION")))
         proton_row = QHBoxLayout()
         self.install_proton = QComboBox()
@@ -1511,6 +1558,7 @@ class LauncherWindow(QMainWindow):
         exe = Path(self.exe_path.text().strip()).expanduser()
         proton = self.install_proton.currentData()
         prefix_location = self.prefix_location.text().strip()
+        category = self.app_category.currentData()
         if not name:
             QMessageBox.warning(self, tr("Game name required"), tr("Enter a name for this game."))
             return
@@ -1569,6 +1617,7 @@ class LauncherWindow(QMainWindow):
             "executable": str(exe.resolve()),
             "proton_path": str(Path(proton).resolve()),
             "compat_data_path": str(prefix_path),
+            "category": category,
         }
         self.state["games"].append(game)
         if not self.persist_state():
@@ -1589,6 +1638,7 @@ class LauncherWindow(QMainWindow):
             )
         self.game_name.clear()
         self.exe_path.clear()
+        self.app_category.setCurrentIndex(self.app_category.findData("Game"))
         self.show_page("installed")
         self.request_game_icon(game)
 
@@ -1781,7 +1831,7 @@ class LauncherWindow(QMainWindow):
             f"Exec={command}",
             f"Path={self.desktop_entry_string(str(executable.parent))}",
             "Terminal=false",
-            "Categories=Game;",
+            f"Categories={game.get('category', 'Game')};",
             "StartupNotify=true",
             f"X-Kbroton-GameId={game['id']}",
         ]

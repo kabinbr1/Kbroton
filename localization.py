@@ -4,8 +4,7 @@ from pathlib import Path
 
 
 LANGUAGE_NAMES = {
-    "en_US": "English (US)",
-    "en_GB": "English (UK)",
+    "en_US": "English",
     "es": "Español",
     "pt_BR": "Português (Brasil)",
     "fr": "Français",
@@ -49,11 +48,11 @@ def resolve_language(selection, system_locale=None):
     system_locale = (
         system_locale.split(":")[0].split(".")[0].split("@")[0].replace("-", "_")
     )
-    language, _, region = system_locale.partition("_")
+    language = system_locale.partition("_")[0]
     if language == "pt":
         return "pt_BR"
     if language == "en":
-        return "en_GB" if region.upper() == "GB" else "en_US"
+        return "en_US"
     if language in ("es", "fr", "de"):
         return language
     return "en_US"

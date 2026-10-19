@@ -2,6 +2,9 @@
 
 A Qt 6 desktop launcher for adding and running Windows games and apps with GE-Proton/Wine/Proton on Linux.
 
+When adding an app or game, choose its XDG application-menu category. Kbroton
+creates a desktop shortcut in the user's applications directory with that category.
+
 <img width="1170" height="878" alt="Captura_de_tela_20261018_233906" src="https://github.com/user-attachments/assets/df91237d-d800-4bb9-b2c1-596592226fba" />
 
 
