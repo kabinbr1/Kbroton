@@ -45,7 +45,7 @@ from PySide6.QtWidgets import (
 from localization import LANGUAGE_OPTIONS, resolve_language, set_language, tr
 
 APP_NAME = "Kbroton"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.0.1"
 PROTON_GE_RELEASES_API = (
     "https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases/latest"
 )

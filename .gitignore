@@ -2,3 +2,4 @@
 __pycache__/localization.cpython-314.pyc
 __pycache__/main.cpython-314.pyc
 dist/kbroton-0.1.0-1.fc44.noarch.rpm
+/dist
