@@ -31,6 +31,8 @@ prepare_tree() {
     install -Dm 0755 "$BUILD_DIR/kbroton" "$destination/usr/bin/kbroton"
     install -Dm 0644 "$BUILD_DIR/kbroton.desktop" \
         "$destination/usr/share/applications/kbroton.desktop"
+    install -Dm 0644 "$ROOT_DIR/LICENSE" \
+        "$destination/usr/share/licenses/kbroton/LICENSE"
     install -Dm 0644 "$ROOT_DIR/README.md" \
         "$destination/usr/share/doc/kbroton/README.md"
 }

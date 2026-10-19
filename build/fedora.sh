@@ -20,7 +20,7 @@ Name:           kbroton
 Version:        $VERSION
 Release:        1%{?dist}
 Summary:        Qt launcher for Windows games and apps with Proton
-License:        NOASSERTION
+License:        GPL-3.0-or-later
 BuildArch:      noarch
 Requires:       python3 >= 3.10
 Requires:       python3-pyside6
@@ -42,6 +42,7 @@ tar -xzf %{SOURCE0} -C %{buildroot}
 /usr/lib/kbroton
 /usr/share/applications/kbroton.desktop
 /usr/share/icons/hicolor/512x512/apps/kbroton.png
+%license /usr/share/licenses/kbroton/LICENSE
 /usr/share/doc/kbroton/README.md
 EOF
 

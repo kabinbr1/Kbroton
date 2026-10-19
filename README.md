@@ -14,6 +14,9 @@ creates a desktop shortcut in the user's applications directory with that catego
 - PySide6
 - Internet access only when downloading/updating GE-Proton or looking up online artwork
 
+Kbroton is licensed under the GNU General Public License, version 3 or (at your
+option) any later version. See [LICENSE](./LICENSE).
+
 Kbroton detects Proton installations from Steam and lets you select one in
 Settings. GE-Proton is not downloaded automatically unless automatic updates
 are enabled in Settings; you can also download or update it there at any time.

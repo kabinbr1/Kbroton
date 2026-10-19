@@ -21,7 +21,7 @@ pkgrel=1
 pkgdesc='Qt launcher for Windows games and apps with Proton'
 arch=('any')
 url='https://github.com/kabinbr1/Kbroton'
-license=('unknown')
+license=('GPL-3.0-or-later')
 depends=('python>=3.10' 'pyside6')
 source=("kbroton-\$pkgver.tar.gz")
 sha256sums=('SKIP')

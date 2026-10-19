@@ -13,6 +13,19 @@ package_dir="$work_dir/kbroton"
 prepare_tree "$package_dir"
 
 mkdir -p "$package_dir/DEBIAN"
+{
+    cat <<EOF
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: Kbroton
+Source: https://github.com/kabinbr1/Kbroton
+
+Files: *
+Copyright: 2026 Kbroton contributors
+License: GPL-3.0-or-later
+EOF
+    sed 's/^/ /' "$ROOT_DIR/LICENSE"
+} > "$package_dir/usr/share/doc/kbroton/copyright"
+
 cat > "$package_dir/DEBIAN/control" <<EOF
 Package: kbroton
 Version: $VERSION
