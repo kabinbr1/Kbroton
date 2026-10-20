@@ -2,9 +2,6 @@
 
 A Qt 6 desktop launcher for adding and running Windows games and apps with GE-Proton/Wine/Proton on Linux.
 
-When adding an app or game, choose its XDG application-menu category. Kbroton
-creates a desktop shortcut in the user's applications directory with that category.
-
 <img width="1170" height="878" alt="Captura_de_tela_20261018_233906" src="https://github.com/user-attachments/assets/df91237d-d800-4bb9-b2c1-596592226fba" />
 
 
@@ -14,14 +11,6 @@ creates a desktop shortcut in the user's applications directory with that catego
 - PySide6
 - Internet access only when downloading/updating GE-Proton or looking up online artwork
 
-Kbroton is licensed under the GNU General Public License, version 3 or (at your
-option) any later version. See [LICENSE](./LICENSE).
-
-Kbroton detects Proton installations from Steam and lets you select one in
-Settings. GE-Proton is not downloaded automatically unless automatic updates
-are enabled in Settings; you can also download or update it there at any time.
-On first launch, Kbroton asks whether you want to install GE-Proton and
-recommends it when no other Proton version is detected.
 
 ## Run
 
@@ -42,8 +31,3 @@ distribution's package-building tools and writes the package to `dist/`.
 ./build/fedora.sh  # Fedora: creates an .rpm (requires rpmbuild)
 ./build/arch.sh    # Arch Linux: creates a .pkg.tar.zst (requires makepkg)
 ```
-
-The packages install the application under `/usr/lib/kbroton`, add the
-`kbroton` command and a desktop launcher, and depend on the distribution's
-Python and PySide6 packages. Set `VERSION` to override the package version
-(default `1.0.0`) or `OUTPUT_DIR` to change the output directory.
