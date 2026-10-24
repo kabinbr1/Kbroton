@@ -2125,7 +2125,7 @@ class LauncherWindow(QMainWindow):
         icon_actions.addWidget(save_icon)
         layout.addLayout(icon_actions)
 
-        change_executable = QPushButton(tr("Change game executable"))
+        change_executable = QPushButton(tr("Change app/game executable"))
         change_executable.setObjectName("secondaryButton")
         change_executable.clicked.connect(
             lambda: self.choose_game_executable(dialog, game)
@@ -2136,14 +2136,22 @@ class LauncherWindow(QMainWindow):
         winecfg.setObjectName("secondaryButton")
         self.game_winecfg_buttons[game["id"]] = winecfg
         session = self.game_sessions.get(game["id"], {})
+        prefix_utility_running = any(
+            session.get("active_by_kind", {}).get(kind)
+            or session.get("pids_by_kind", {}).get(kind)
+            for kind in ("winecfg", "run-exe", "winetricks")
+        )
         winecfg_running = bool(
             session.get("active_by_kind", {}).get("winecfg")
             or session.get("pids_by_kind", {}).get("winecfg")
         )
-        winecfg.setEnabled(not winecfg_running)
+        winecfg.setEnabled(not winecfg_running and not prefix_utility_running)
         winecfg.setToolTip(
             tr("Wine Configuration is already open for this game.")
-            if winecfg_running else tr("Open Wine Configuration for this game's prefix.")
+            if winecfg_running
+            else tr("A prefix utility is already running for this app.")
+            if prefix_utility_running
+            else tr("Open Wine Configuration for this game's prefix.")
         )
         dialog.finished.connect(
             lambda result, game_id=game["id"], button=winecfg:
@@ -2151,6 +2159,35 @@ class LauncherWindow(QMainWindow):
         )
         winecfg.clicked.connect(lambda: self.open_wine_config_from_settings(dialog, game))
         layout.addWidget(winecfg)
+
+        run_executable = QPushButton(tr("Run a .exe file inside the prefix"))
+        run_executable.setObjectName("secondaryButton")
+        run_executable.setEnabled(not prefix_utility_running)
+        run_executable.setToolTip(
+            tr("A prefix utility is already running for this app.")
+            if prefix_utility_running
+            else tr("Run a Windows executable in this app's Proton prefix.")
+        )
+        run_executable.clicked.connect(
+            lambda: self.run_executable_from_settings(dialog, game)
+        )
+        layout.addWidget(run_executable)
+
+        winetricks_path = shutil.which("winetricks")
+        winetricks = QPushButton(tr("Run Winetricks"))
+        winetricks.setObjectName("secondaryButton")
+        winetricks.setEnabled(bool(winetricks_path) and not prefix_utility_running)
+        winetricks.setToolTip(
+            tr("Install Winetricks system-wide to enable this button.")
+            if not winetricks_path
+            else tr("A prefix utility is already running for this app.")
+            if prefix_utility_running
+            else tr("Run Winetricks in this app's Proton prefix.")
+        )
+        winetricks.clicked.connect(
+            lambda: self.run_winetricks_from_settings(dialog, game)
+        )
+        layout.addWidget(winetricks)
 
         remove = QPushButton(tr("Remove game"))
         remove.setObjectName("removeGameButton")
@@ -2294,6 +2331,80 @@ class LauncherWindow(QMainWindow):
             f"[{APP_NAME}] Game executable changed to {game['executable']}.\n",
         )
 
+    def run_executable_from_settings(self, dialog, game):
+        prefix = self.game_compat_data_path(game)
+        start_directory = next(
+            (
+                path for path in (prefix / "pfx" / "drive_c", prefix)
+                if path.is_dir()
+            ),
+            Path.home(),
+        )
+        executable, _ = QFileDialog.getOpenFileName(
+            dialog,
+            tr("Select an .exe file to run inside the prefix"),
+            str(start_directory),
+            tr("Windows executable (*.exe)"),
+        )
+        if not executable:
+            return
+        selected_executable = Path(executable).expanduser()
+        if not selected_executable.is_file() or selected_executable.suffix.lower() != ".exe":
+            QMessageBox.warning(
+                dialog,
+                tr("Invalid executable"),
+                tr("Select an existing Windows .exe file."),
+            )
+            return
+        selected_executable = selected_executable.resolve()
+        dialog.accept()
+        self.launch_proton_command(
+            game,
+            "run-exe",
+            ["run", str(selected_executable)],
+            executable=selected_executable,
+        )
+
+    def run_winetricks_from_settings(self, dialog, game):
+        winetricks_path = shutil.which("winetricks")
+        if not winetricks_path:
+            QMessageBox.warning(
+                dialog,
+                tr("Winetricks is not installed"),
+                tr("Install Winetricks system-wide to enable this button."),
+            )
+            return
+
+        proton_root = Path(game["proton_path"]).expanduser().resolve().parent
+        wine_binary = next(
+            (
+                path for path in (
+                    proton_root / "files/bin/wine",
+                    proton_root / "dist/bin/wine",
+                )
+                if path.is_file()
+            ),
+            None,
+        )
+        if wine_binary is None:
+            QMessageBox.critical(
+                dialog,
+                tr("Proton Wine executable not found"),
+                tr("The selected Proton version does not contain a Wine executable."),
+            )
+            return
+
+        wineserver = wine_binary.with_name("wineserver")
+        dialog.accept()
+        self.launch_proton_command(
+            game,
+            "winetricks",
+            [],
+            program=Path(winetricks_path),
+            wine_binary=wine_binary,
+            wineserver=wineserver if wineserver.is_file() else None,
+        )
+
     def open_wine_config_from_settings(self, dialog, game):
         dialog.accept()
         self.launch_winecfg(game)
@@ -2366,9 +2477,19 @@ class LauncherWindow(QMainWindow):
             return
         self.launch_game(game)
 
-    def launch_proton_command(self, game, process_kind, arguments):
+    def launch_proton_command(
+        self,
+        game,
+        process_kind,
+        arguments,
+        *,
+        executable=None,
+        program=None,
+        wine_binary=None,
+        wineserver=None,
+    ):
         proton = Path(game.get("proton_path", ""))
-        exe = Path(game.get("executable", ""))
+        exe = Path(executable or game.get("executable", ""))
         game_id = game.get("id", "")
         session = self.game_sessions.get(game_id, {})
         if process_kind == "winecfg" and (
@@ -2382,9 +2503,33 @@ class LauncherWindow(QMainWindow):
                 )
             )
             return
-        if process_kind == "game" and (
-            game_id in self.game_processes or session.get("active") or session.get("pids_by_kind", {}).get("game")
+        if process_kind == "winecfg" and any(
+            session.get("active_by_kind", {}).get(kind)
+            or session.get("pids_by_kind", {}).get(kind)
+            for kind in ("run-exe", "winetricks")
         ):
+            self.set_game_launch_status(
+                tr("A prefix utility is already running for this app.")
+            )
+            return
+        if process_kind == "game" and (
+            game_id in self.game_processes
+            or session.get("active")
+            or session.get("pids_by_kind", {}).get("game")
+            or any(
+                session.get("pids_by_kind", {}).get(kind)
+                for kind in ("winecfg", "run-exe", "winetricks")
+            )
+        ):
+            return
+        if process_kind in ("run-exe", "winetricks") and any(
+            session.get("active_by_kind", {}).get(kind)
+            or session.get("pids_by_kind", {}).get(kind)
+            for kind in ("winecfg", "run-exe", "winetricks")
+        ):
+            self.set_game_launch_status(
+                tr("A prefix utility is already running for this app.")
+            )
             return
         if not proton.is_file():
             QMessageBox.critical(
@@ -2396,7 +2541,7 @@ class LauncherWindow(QMainWindow):
                 ),
             )
             return
-        if not exe.is_file():
+        if process_kind not in ("run-exe", "winetricks") and not exe.is_file():
             QMessageBox.critical(
                 self,
                 tr("Game not found"),
@@ -2437,14 +2582,25 @@ class LauncherWindow(QMainWindow):
         env.insert("STEAM_COMPAT_APP_ID", str(int(prefix_id[:8], 16) % 2_000_000_000 or 1))
         env.insert("ASTER_GAME_ID", game_id)
         env.insert("ASTER_PROCESS_KIND", process_kind)
+        if process_kind == "winetricks":
+            prefix_wine = wine_binary or proton.parent / "files/bin/wine"
+            env.insert("WINEPREFIX", str(prefix / "pfx"))
+            env.insert("WINE", str(prefix_wine))
+            if wineserver:
+                env.insert("WINESERVER", str(wineserver))
 
         process = QProcess(self)
         process.setObjectName(f"{process_kind}-{game_id}")
         process.setProcessEnvironment(env)
         process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
-        process.setWorkingDirectory(str(exe.resolve().parent))
-        process.setProgram(str(proton.resolve()))
+        working_directory = exe.resolve().parent if exe.is_file() else prefix
+        process.setWorkingDirectory(str(working_directory))
+        process.setProgram(str(Path(program).resolve()) if program else str(proton.resolve()))
         process.setArguments(arguments)
+        process.setProperty(
+            "launchedExecutable",
+            str(program) if process_kind == "winetricks" else str(exe),
+        )
         process.started.connect(
             lambda item=game, kind=process_kind:
             self.on_game_process_started(item, kind, prefix)
@@ -2486,10 +2642,18 @@ class LauncherWindow(QMainWindow):
             )
         )
         process.start()
-        self.update_game_play_button(game_id, process_kind == "game")
+        self.update_game_play_button(
+            game_id,
+            process_kind == "game",
+            prefix_busy=process_kind != "game",
+        )
 
     def on_game_process_started(self, game, process_kind, prefix):
-        action = "Wine Configuration" if process_kind == "winecfg" else "game"
+        action = {
+            "winecfg": "Wine Configuration",
+            "run-exe": "Windows executable",
+            "winetricks": "Winetricks",
+        }.get(process_kind, "game")
         self.set_game_launch_status(
             tr(
                 "Starting {action} for {game} with {version}. Proton is using {prefix}.",
@@ -2508,7 +2672,7 @@ class LauncherWindow(QMainWindow):
     def read_game_process_output(self, process, game, process_kind):
         output = bytes(process.readAllStandardOutput()).decode("utf-8", errors="replace")
         if output:
-            prefix = "[winecfg] " if process_kind == "winecfg" else ""
+            prefix = f"[{process_kind}] " if process_kind != "game" else ""
             self.append_game_log(game["id"], prefix + output)
 
     def on_game_process_error(self, process, game, error, process_kind):
@@ -2518,32 +2682,62 @@ class LauncherWindow(QMainWindow):
         if process_kind == "game":
             self.game_processes.pop(game_id, None)
         self.finish_game_process(game_id, process_kind)
-        details = (
-            tr(
+        if process_kind == "game":
+            details = tr(
                 "{app} could not start Proton for {game}.\n\n"
                 "Proton: {proton}\nExecutable: {executable}\nError: {error}",
                 app=APP_NAME,
                 game=game.get("name", tr("this game")),
                 proton=process.program(),
-                executable=game.get("executable", ""),
+                executable=process.property("launchedExecutable"),
                 error=process.errorString(),
             )
-        )
+            action = tr("game")
+        else:
+            action = tr(
+                "Wine Configuration"
+                if process_kind == "winecfg"
+                else "Windows executable"
+                if process_kind == "run-exe"
+                else "Winetricks"
+            )
+            details = tr(
+                "{app} could not start {action} for {game}.\n\n"
+                "Program: {program}\nError: {error}",
+                app=APP_NAME,
+                action=action,
+                game=game.get("name", tr("this game")),
+                program=process.program(),
+                error=process.errorString(),
+            )
         self.set_game_launch_status(
             tr(
                 "Could not start {game}: {error}",
                 game=game.get("name", tr("game")),
                 error=process.errorString(),
             )
+            if process_kind == "game"
+            else tr(
+                "Could not start {action} for {game}: {error}",
+                action=action,
+                game=game.get("name", tr("game")),
+                error=process.errorString(),
+            )
         )
         self.append_game_log(game_id, f"[{APP_NAME} error] {process.errorString()}\n")
-        QMessageBox.critical(self, tr("Could not start game"), details)
+        QMessageBox.critical(
+            self,
+            tr("Could not start game")
+            if process_kind == "game"
+            else tr("Prefix utility failed"),
+            details,
+        )
 
     def on_game_process_finished(self, process, game, exit_code, exit_status, process_kind):
         game_id = game["id"]
         output = bytes(process.readAllStandardOutput()).decode("utf-8", errors="replace").strip()
         if output:
-            prefix = "[winecfg] " if process_kind == "winecfg" else ""
+            prefix = f"[{process_kind}] " if process_kind != "game" else ""
             self.append_game_log(game_id, prefix + output + "\n")
         if process_kind == "game":
             self.game_processes.pop(game_id, None)
@@ -2559,39 +2753,81 @@ class LauncherWindow(QMainWindow):
                     tr("Wine Configuration closed for {game}.", game=game.get("name", tr("game")))
                 )
                 self.append_game_log(game_id, f"[{APP_NAME}] Wine Configuration closed.\n")
+            elif process_kind in ("run-exe", "winetricks"):
+                action = tr(
+                    "Windows executable"
+                    if process_kind == "run-exe"
+                    else "Winetricks"
+                )
+                self.set_game_launch_status(
+                    tr("{action} closed for {game}.", action=action, game=game.get("name", tr("game")))
+                )
+                self.append_game_log(
+                    game_id,
+                    f"[{APP_NAME}] {action} closed.\n",
+                )
             else:
                 self.append_game_log(game_id, f"[{APP_NAME}] {game.get('name', 'Game')} exited.\n")
         else:
             reason = (
                 tr("Proton exited with code {code}.", code=exit_code)
-                if exit_status == QProcess.ExitStatus.NormalExit
+                if process_kind == "game" and exit_status == QProcess.ExitStatus.NormalExit
                 else tr("Proton crashed while launching the game.")
+                if process_kind == "game"
+                else tr("Process exited with code {code}.", code=exit_code)
+                if exit_status == QProcess.ExitStatus.NormalExit
+                else tr("The prefix utility crashed.")
             )
             if not output:
                 output = self.log_buffers.get(game_id, "").strip()
-            details = (
-                tr(
+            if process_kind == "game":
+                details = tr(
                     "{game} did not start successfully.\n\n{reason}\n\n"
                     "Proton: {proton}\nExecutable: {executable}\n"
                     "Compatibility data: {compat_data}",
                     game=game.get("name", tr("this game")),
                     reason=reason,
                     proton=process.program(),
-                    executable=game.get("executable", ""),
+                    executable=process.property("launchedExecutable"),
                     compat_data=process.processEnvironment().value("STEAM_COMPAT_DATA_PATH"),
                 )
-            )
-            if output:
-                details += f"\n\nProton output:\n{output[-8000:]}"
-            self.set_game_launch_status(
-                tr(
+                title = tr("Game launch failed")
+                status = tr(
                     "Could not run {game}: {reason}",
                     game=game.get("name", tr("game")),
                     reason=reason,
                 )
-            )
+            else:
+                action = tr(
+                    "Wine Configuration"
+                    if process_kind == "winecfg"
+                    else "Windows executable"
+                    if process_kind == "run-exe"
+                    else "Winetricks"
+                )
+                details = tr(
+                    "{action} did not complete successfully.\n\n{reason}\n\n"
+                    "Program: {program}\nCompatibility data: {compat_data}",
+                    action=action,
+                    reason=reason,
+                    program=process.program(),
+                    compat_data=process.processEnvironment().value("STEAM_COMPAT_DATA_PATH"),
+                )
+                title = tr("Prefix utility failed")
+                status = tr(
+                    "Could not run {action} for {game}: {reason}",
+                    action=action,
+                    game=game.get("name", tr("game")),
+                    reason=reason,
+                )
+            if output:
+                details += (
+                    f"\n\n{tr('Proton output' if process_kind == 'game' else 'Process output')}:\n"
+                    f"{output[-8000:]}"
+                )
+            self.set_game_launch_status(status)
             self.append_game_log(game_id, f"[{APP_NAME} error] {reason}\n")
-            QMessageBox.critical(self, tr("Game launch failed"), details)
+            QMessageBox.critical(self, title, details)
 
     def finish_game_process(self, game_id, process_kind):
         session = self.game_sessions.get(game_id)
@@ -2657,6 +2893,11 @@ class LauncherWindow(QMainWindow):
                 self.update_game_play_button(
                     game_id,
                     bool(game_pids) or game_id in self.game_processes,
+                    prefix_busy=bool(session["active"])
+                    or any(
+                        pids_by_kind.get(kind)
+                        for kind in ("winecfg", "run-exe", "winetricks")
+                    ),
                 )
             settings_button = self.game_settings_buttons.get(game_id)
             if settings_button:
@@ -2722,16 +2963,19 @@ class LauncherWindow(QMainWindow):
             or session.get("pids_by_kind", {}).get("game")
         )
 
-    def update_game_play_button(self, game_id, running):
+    def update_game_play_button(self, game_id, running, prefix_busy=False):
         running_or_stopping = running or game_id in self.force_stop_pending
         button = self.game_play_buttons.get(game_id)
         if button:
             button.setVisible(not running_or_stopping)
-            button.setEnabled(not running_or_stopping)
+            button.setEnabled(not running_or_stopping and not prefix_busy)
             button.setText(tr("Running") if running_or_stopping else tr("Play"))
             button.setToolTip(
                 tr("This game is running under Wine.")
-                if running_or_stopping else tr("Launch this game with Proton.")
+                if running_or_stopping
+                else tr("A prefix utility is already running for this app.")
+                if prefix_busy
+                else tr("Launch this game with Proton.")
             )
         force_stop = self.game_force_stop_buttons.get(game_id)
         if force_stop:
