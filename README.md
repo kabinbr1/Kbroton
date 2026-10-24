@@ -2,7 +2,7 @@
 
 A Qt 6 desktop launcher for adding and running Windows games and apps with GE-Proton/Wine/Proton on Linux.
 
-<img width="1170" height="878" alt="Captura_de_tela_20261018_233906" src="https://github.com/user-attachments/assets/df91237d-d800-4bb9-b2c1-596592226fba" />
+<img width="1170" height="878" alt="Captura_de_tela_20261024_185545" src="https://github.com/user-attachments/assets/f4a95686-de6a-44da-b3f0-93812ad58015" />
 
 
 ## Requirements
@@ -31,3 +31,4 @@ distribution's package-building tools and writes the package to `dist/`.
 ./build/fedora.sh  # Fedora: creates an .rpm (requires rpmbuild)
 ./build/arch.sh    # Arch Linux: creates a .pkg.tar.zst (requires makepkg)
 ```
+
