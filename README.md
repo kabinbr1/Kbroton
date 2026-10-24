@@ -2,7 +2,8 @@
 
 A Qt 6 desktop launcher for adding and running Windows games and apps with GE-Proton/Wine/Proton on Linux.
 
-<img width="1170" height="878" alt="Captura_de_tela_20261024_185545" src="https://github.com/user-attachments/assets/f4a95686-de6a-44da-b3f0-93812ad58015" />
+<img width="1170" height="878" alt="Captura_de_tela_20261024_191449" src="https://github.com/user-attachments/assets/2936527b-af2a-4919-a9a4-5c80a19decab" />
+
 
 
 ## Requirements
