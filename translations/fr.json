@@ -1,5 +1,6 @@
 {
   "1 game": "1 jeu",
+  "1 app or game installed": "1 application ou jeu installé",
   "A prefix folder already exists at the generated location:\n{path}": "Un dossier de préfixe existe déjà à l'emplacement généré :\n{path}",
   "Add a SteamGridDB API key in Settings to look up an icon.": "Ajoutez une clé API SteamGridDB dans les Paramètres pour rechercher une icône.",
   "Add a SteamGridDB key in Settings to show artwork for your apps.": "Ajoutez une clé SteamGridDB dans les Paramètres pour afficher les illustrations de vos applications.",
@@ -237,6 +238,7 @@
   "{app} could not start Proton for {game}.\n\nProton: {proton}\nExecutable: {executable}\nError: {error}": "{app} n'a pas pu démarrer Proton pour {game}.\n\nProton : {proton}\nExécutable : {executable}\nErreur : {error}",
   "{app} — Game Launcher": "{app} — Lanceur de jeux",
   "{count} games": "{count} jeux",
+  "{count} apps and games installed": "{count} applications et jeux installés",
   "{game} did not start successfully.\n\n{reason}\n\nProton: {proton}\nExecutable: {executable}\nCompatibility data: {compat_data}": "{game} n'a pas démarré correctement.\n\n{reason}\n\nProton : {proton}\nExécutable : {executable}\nDonnées de compatibilité : {compat_data}",
   "{game} settings": "Paramètres de {game}",
   "{message}\n\nKbroton is using: {directory}": "{message}\n\nKbroton utilise : {directory}",

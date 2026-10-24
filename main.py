@@ -1659,7 +1659,9 @@ class LauncherWindow(QMainWindow):
         games = self.state.get("games", [])
         count = len(games)
         self.game_count.setText(
-            tr("1 game") if count == 1 else tr("{count} games", count=count)
+            tr("1 app or game installed")
+            if count == 1
+            else tr("{count} apps and games installed", count=count)
         )
         if not games:
             empty_panel = QFrame()
