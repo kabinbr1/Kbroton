@@ -45,7 +45,7 @@ from PySide6.QtWidgets import (
 from localization import LANGUAGE_OPTIONS, resolve_language, set_language, tr
 
 APP_NAME = "Kbroton"
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.1.1"
 APP_CATEGORIES = (
     ("Game", "Game"),
     ("AudioVideo", "Audio/Video"),
